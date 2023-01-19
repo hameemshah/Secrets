@@ -1,9 +1,10 @@
-require('dotenv').config();
 const express = require('express');
 const bodyParser = require('body-parser');
 const ejs = require('ejs');
 const mongoose = require('mongoose');
-const encrypt = require('mongoose-encryption');
+const md5 = require('md5');
+const bcrypt = require('bcrypt');
+const saltRounds = 12;
 
 const app = express();
 
@@ -20,8 +21,6 @@ const userSchema = mongoose.Schema({
     password : String
 });
 
-userSchema.plugin(encrypt, { secret: process.env.SECRET, encryptedFields: ['password'] });
-
 const User = mongoose.model("User", userSchema);
 
 app.get('/', (req, res) => {
@@ -37,29 +36,36 @@ app.get('/register', (req, res) => {
 });
 
 app.post('/register', (req, res) => {
-    const newUser = new User({
-        email : req.body.username,
-        password : req.body.password
+
+    bcrypt.hash(req.body.password, saltRounds, (err, hash) => {
+        const newUser = new User({
+            email : req.body.username,
+            password : hash
+        });
+        newUser.save((err) => {
+            if (err) return console.log(err);
+            else res.render('secrets');
+        });
     });
-    newUser.save((err) => {
-        if (err) return console.log(err);
-        else res.render('secrets');
-    });
+
 });
 
 app.post('/login', (req, res) => {
     const id = req.body.username;
     const pass = req.body.password;
-User.findOne({email : id}, (err, result) => {
+User.findOne({email : id}, (err, doc) => {
     if (err) res.send(err);
     else {
-        if (result.password === pass){
-            res.render('secrets');
+        bcrypt.compare(pass, doc.password, (err, result) => {
+            if(result == true) {
+                res.render('secrets');
+            }
+            else {
+                res.send("Username and Password don't match.");
+            }
+        } );
         }
-        else {
-            res.send("Username and Password don't match.");
-        }
-    }
 });
 });
+
 app.listen(3000, () => console.log('Server started at Port 3000'));
